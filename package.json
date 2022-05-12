@@ -1,0 +1,24 @@
+{
+  "name": "tnes",
+  "version": "1.0.0",
+  "description": "Typescript NES Emulator",
+  "main": "script.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc script"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LilyWS/TNES.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/LilyWS/TNES/issues"
+  },
+  "homepage": "https://github.com/LilyWS/TNES#readme",
+  "dependencies": {
+    "typescript": "^4.6.4"
+  }
+}
