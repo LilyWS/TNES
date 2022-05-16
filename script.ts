@@ -28,7 +28,7 @@ class olc6502 { //the cpu
 
         this.a = 0; //accumulator
 		this.x = 0; //general use register
-		this.y = 0; //whore (general use) regist
+		this.y = 0; //general use register
 		this.stkp = 0; //points to somewhere on bus
 		this.pc = 0; //its the program counter
 		this.status = 0; //the status register. keeps track of the flags in a single bit
@@ -113,9 +113,67 @@ class olc6502 { //the cpu
 	XXX(){}; //this function will catch all unofficial opcodes and as a NOP call
     
     // these three functions are asynchronous. they are activated externally and will change the state of the cpu. 
-    reset(){}; //pass a reset signal
-    irq(){}; //pass an interupt request signal
-    nmi(){}; //non-maskable interupt
+    reset() { //pass a reset signal
+		this.absAddr = 0xFFFC;
+		let lo = this.read(this.absAddr + 0);
+		let hi = this.read(this.absAddr + 1);
+
+		this.pc = (hi << 8) | lo;
+
+		this.a = 0;
+		this.x = 0;
+		this.y = 0;
+		this.stkp = 0xFD;
+		this.status = 0x00;
+
+		this.relAddr = 0x0000;
+		this.absAddr = 0x0000;
+		this.fetched = 0x00;
+
+		this.cycles = 8;
+	}; 
+    irq() { //pass an interupt request signal
+		if(this.getFlag(this.flags.I) == 0) {
+			this.write(0x0100 + this.stkp, (this.pc >> 8) & 0x00FF);
+			this.stkp--;
+			this.write(0x0100 + this.stkp, this.pc & 0x00FF);
+			this.stkp--;
+
+			this.setFlag(this.flags.B, 0);
+			this.setFlag(this.flags.U, 1);
+			this.setFlag(this.flags.I, 1);
+			this.write(0x0100 + this.stkp, this.status);
+			this.stkp--;
+
+			this.absAddr = 0xFFFE;
+			let lo = this.read(this.absAddr + 0);
+			let hi = this.read(this.absAddr + 1);
+	
+			this.pc = (hi << 8) | lo;
+
+			this.cycles = 7; 
+		}
+	};
+	nmi(){ //non-maskable interupt
+		this.write(0x0100 + this.stkp, (this.pc >> 8) & 0x00FF);
+		this.stkp--;
+		this.write(0x0100 + this.stkp, this.pc & 0x00FF);
+		this.stkp--;
+
+		this.setFlag(this.flags.B, 0);
+		this.setFlag(this.flags.U, 1);
+		this.setFlag(this.flags.I, 1);
+		this.write(0x0100 + this.stkp, this.status);
+		this.stkp--;
+
+		this.absAddr = 0xFFFA;
+		let lo = this.read(this.absAddr + 0);
+		let hi = this.read(this.absAddr + 1);
+
+		this.pc = (hi << 8) | lo;
+
+		this.cycles = 8; 
+	};
 
     clock() { //pass a clock cycle
 		if(this.cycles == 0){//if its time for next opcode
@@ -123,6 +181,7 @@ class olc6502 { //the cpu
 			this.opcode = this.read(this.pc); 
             this.pc++;
 
+			console.log("ran clock cycle");
             let opc = this.lookup[this.opcode]; //stores the opcode we need
 
             this.cycles = opc[3] as number;
@@ -262,6 +321,32 @@ class olc6502 { //the cpu
         return this.fetched;
     } 
 
+	ADC() { //add with carry in 
+		this.fetch();
+		let temp = this.a + this.fetched + this.getFlag(this.flags.C); //POTENTIAL BUG: carry bit might not be accurate here
+
+		this.setFlag(this.flags.C, temp > 255);
+		this.setFlag(this.flags.Z, (temp & 0x00FF) == 0);
+		this.setFlag(this.flags.N, temp & 0x80);
+		//set the v flag based on signed overflow
+		this.setFlag(this.flags.V, (~(this.a ^ this.fetched) & this.a ^ temp) & 0x0080);
+		this.a = temp & 0x00FF;
+		return 1;
+	}
+
+	SBC() { //subtract with carry in
+		this.fetch();
+		
+		let value = this.fetched ^ 0x0FF;
+
+		let temp = this.a + value + this.getFlag(this.flags.C);
+		this.setFlag(this.flags.C, temp & 0xFF00);
+		this.setFlag(this.flags.Z, (temp & 0x00FF) == 0);
+		this.setFlag(this.flags.N, temp & 0x80);
+		this.a = temp & 0x00FF;
+		return 1;
+	}
+
     AND() { //logic bitwise and
         this.fetch();
         this.a = this.a & this.fetched;
@@ -269,6 +354,34 @@ class olc6502 { //the cpu
         this.setFlag(this.flags.constructor, this.a & 0x80);
         return 1
     }
+
+	// Instruction: Arithmetic Shift Left
+	// Function:    A = C <- (A << 1) <- 0
+	// Flags Out:   N, Z, C
+	ASL() {
+		this.fetch();
+		let temp = this.fetched << 1;
+		this.setFlag(this.flags.C, (temp & 0xFF00) > 0);
+		this.setFlag(this.flags.Z, (temp & 0x00FF) == 0x00);
+		this.setFlag(this.flags.N, (temp & 0x80));
+		return 1;
+	}
+
+	// Instruction: Branch if Carry Clear
+	// Function:    if(C == 0) pc = address 
+	BCC() {
+		if(this.getFlag(this.flags.C) == 0){
+			this.cycles++;
+			this.absAddr = this.pc + this.relAddr;
+
+            if((this.absAddr & 0xFF00) != (this.pc & 0xFF00)) {
+                this.cycles++;
+            }
+
+            this.pc = this.absAddr;
+		}
+		return 0;
+	}
 
     BCS() { //Branch if carry set
         if (this.getFlag(this.flags.C) == 1) {
@@ -285,9 +398,10 @@ class olc6502 { //the cpu
     }
 
 	BEQ() { //branch if equal
-		this.getFlag(this.flags.Z == 1){
+		if (this.getFlag(this.flags.Z) == 1){
 			this.cycles++;
 			this.absAddr = this.pc + this.relAddr;
+
 			if((this.absAddr & 0xFF00) != (this.pc & 0xFF00)) {
                 this.cycles++;
             }
@@ -297,11 +411,420 @@ class olc6502 { //the cpu
 		return 0;
 	}
 
-    CLC() { //clear carry flag
+	BIT() {
+		this.fetch();
+		let temp = this.a & this.fetched;
+		this.setFlag(this.flags.Z, (temp & 0x00FF) == 0x00);
+		this.setFlag(this.flags.N, (1 << 7));
+		this.setFlag(this.flags.V, (1 << 6));
+		return 0;
+	}
+
+	// Instruction: Branch if Negative
+// Function:    if(N == 1) pc = address
+	BMI() {
+		if(this.getFlag(this.flags.N) == 1) {
+			this.cycles++;
+			this.absAddr = this.pc + this.relAddr;
+
+			if((this.absAddr & 0xFF00) != (this.pc & 0xFF00)) {
+                this.cycles++;
+            }
+
+			this.pc = this.absAddr;
+		}
+		return 0;
+	}
+
+	// Instruction: Branch if Not Equal
+	// Function:    if(Z == 0) pc = address
+	BNE() {
+		if(this.getFlag(this.flags.Z) == 0){
+			this.cycles++;
+			this.absAddr = this.pc + this.relAddr;
+
+			if((this.absAddr & 0xFF00) != (this.pc & 0xFF00)) {
+                this.cycles++;
+            }
+
+			this.pc = this.absAddr;
+		}
+		return 0;
+	}
+
+	// Instruction: Branch if Positive
+	// Function:    if(N == 0) pc = address
+	BPL() {
+		if(this.getFlag(this.flags.N) == 0){
+			this.cycles++;
+			this.absAddr = this.pc + this.relAddr;
+
+			if((this.absAddr & 0xFF00) != (this.pc & 0xFF00)) {
+                this.cycles++;
+            }
+
+			this.pc = this.absAddr;
+		}
+		return 0;
+	}
+
+	// Instruction: Break
+	// Function:    Program Sourced Interrupt
+	BRK() {
+		this.pc++;
+
+		this.setFlag(this.flags.I, 1);
+		this.write(0x0100 + this.stkp, (this.pc >> 8) & 0x00FF);
+		this.stkp--;
+		this.write(0x0100 + this.stkp, this.pc & 0x00FF);
+		this.stkp--;
+
+		this.setFlag(this.flags.B, 1);
+		this.write(0x0100 + this.stkp, this.status);
+		this.stkp--;
+		this.setFlag(this.flags.B, 0);
+		
+		this.pc = this.read(0xFFFE) | this.read(0xFFFF) << 8;
+		return 0;
+	}
+
+	// Instruction: Branch if Overflow Clear
+	// Function:    if(V == 0) pc = address
+	BVC() {
+		if(this.getFlag(this.flags.V) == 0){
+			this.cycles++;
+			this.absAddr = this.pc + this.relAddr;
+
+			if((this.absAddr & 0xFF00) != (this.pc & 0xFF00)) {
+                this.cycles++;
+            }
+
+			this.pc = this.absAddr;
+		}
+		return 0;
+	}
+
+	// Instruction: Branch if Overflow Set
+	// Function:    if(V == 1) pc = address
+	BVS() {
+		if(this.getFlag(this.flags.V) == 1){
+			this.cycles++;
+			this.absAddr = this.pc + this.relAddr;
+
+			if((this.absAddr & 0xFF00) != (this.pc & 0xFF00)) {
+                this.cycles++;
+            }
+
+			this.pc = this.absAddr;
+		}
+		return 0;
+	}
+
+	CLC() { //clear carry flag
         this.setFlag(this.flags.C, false);
         return 0;
     }
 
+	CLD() { //clear decimal flag
+        this.setFlag(this.flags.D, false);
+        return 0;
+    }
+
+	// Instruction: Disable Interrupts / Clear Interrupt Flag
+	// Function:    I = 0
+	CLI() { 
+		this.setFlag(this.flags.I, false);
+		return 0;
+	}
+
+	// Instruction: Compare Accumulator
+	// Function:    C <- A >= M      Z <- (A - M) == 0
+	// Flags Out:   N, C, Z
+	CMP() {
+		this.fetch();
+		let temp = this.a - this.fetched;
+		this.setFlag(this.flags.C, this.a >= this.fetched);
+		this.setFlag(this.flags.Z, (temp & 0x00FF) == 0x0000);
+		this.setFlag(this.flags.N, temp & 0x0080);
+		return 1;
+	}
+
+	//compare x register
+	CPX() {
+		this.fetch();
+		let temp = this.x - this.fetched;
+		this.setFlag(this.flags.C, this.x >= this.fetched);
+		this.setFlag(this.flags.Z, (temp & 0x00FF) == 0x0000);
+		this.setFlag(this.flags.N, temp & 0x0080);
+		return 0;
+	}
+
+	//compare y register
+	CPY() {
+		this.fetch();
+		let temp = this.y - this.fetched;
+		this.setFlag(this.flags.C, this.y >= this.fetched);
+		this.setFlag(this.flags.Z, (temp & 0x00FF) == 0x0000);
+		this.setFlag(this.flags.N, temp & 0x0080);
+		return 0;
+	}
+
+	// Instruction: Decrement Value at Memory Location
+	// Function:    M = M - 1
+	// Flags Out:   N, Z
+	DEC() {
+		this.fetch();
+		let temp = this.fetched - 1;
+		this.write(this.absAddr, temp & 0x00FF);
+		this.setFlag(this.flags.Z, (temp & 0x00FF) == 0x0000);
+		this.setFlag(this.flags.N, temp & 0x0080);
+		return 0;
+	}
+
+	DEX() { //decrement x register
+		this.x--;
+		this.setFlag(this.flags.Z, this.x == 0x00);
+		this.setFlag(this.flags.N, this.x & 0x80);
+		return 0;
+	}
+
+	DEY() { // decrement y register
+		this.y--;
+		this.setFlag(this.flags.Z, this.y == 0x00);
+		this.setFlag(this.flags.N, this.y & 0x80);
+		return 0;
+	}
+
+	// Instruction: Bitwise Logic XOR
+	// Function:    A = A xor M
+	// Flags Out:   N, Z
+	EOR() {
+		this.fetch();
+		this.a = this.a ^ this.fetched;
+		this.setFlag(this.flags.Z, this.a == 0x00);
+		this.setFlag(this.flags.N, this.a & 0x80);
+		return 1;
+	}
+
+	// Instruction: Increment Value at Memory Location
+	// Function:    M = M + 1
+	// Flags Out:   N, Z
+	INC() {
+		this.fetch();
+		let temp = this.fetched + 1;
+		this.write(this.absAddr, temp & 0x00FF);
+		this.setFlag(this.flags.Z, (temp & 0x00FF) == 0x0000);
+		this.setFlag(this.flags.N, temp & 0x0080);
+		return 0;
+	}
+
+	INX() { //increment x register
+		this.x++;
+		this.setFlag(this.flags.Z, this.x == 0x00);
+		this.setFlag(this.flags.N, this.x & 0x80);
+		return 0;
+	}
+
+	INY() { // increment y register
+		this.y++;
+		this.setFlag(this.flags.Z, this.y == 0x00);
+		this.setFlag(this.flags.N, this.y & 0x80);
+		return 0;
+	}
+
+	// Instruction: Jump To Location
+	// Function:    pc = address
+	JMP() {
+		this.pc = this.absAddr;
+		return 0;
+	}
+
+	// Instruction: Jump To Sub-Routine
+	// Function:    Push current pc to stack, pc = address
+	JSR() {
+		this.pc--;
+		this.write(0x0100 + this.stkp, (this.pc >> 8) & 0x00FF);
+		this.stkp--;
+		this.write(0x0100 + this.stkp, this.pc & 0x00FF);
+		this.stkp--;
+
+		this.pc = this.absAddr;
+		return 0;
+	}
+
+	// Instruction: Load The Accumulator
+	// Function:    A = M
+	// Flags Out:   N, Z
+	LDA() {
+		this.fetch();
+		this.a = this.fetched;
+		this.setFlag(this.flags.Z, this.a == 0x00);
+		this.setFlag(this.flags.N, this.a & 0x80);
+		return 1;
+	}
+
+	LDX() { //load the x register
+		this.fetch();
+		this.x = this.fetched;
+		this.setFlag(this.flags.Z, this.x == 0x00);
+		this.setFlag(this.flags.N, this.x & 0x80);
+		return 1;
+	}
+
+	LDY() { //load the y register
+		this.fetch();
+		this.y = this.fetched;
+		this.setFlag(this.flags.Z, this.y == 0x00);
+		this.setFlag(this.flags.N, this.y & 0x80);
+		return 1;
+	}
+
+	LSR() {
+		this.fetch();
+		this.setFlag(this.flags.C, this.fetched & 0x0001);
+		let temp = this.fetched >> 1;
+		this.setFlag(this.flags.Z, (temp & 0x00FF) == 0x0000);
+		this.setFlag(this.flags.N, temp & 0x0080);
+		if(this.lookup[this.opcode][2] == this.IMP){
+			this.a = temp & 0x00FF;
+		}else{
+			this.write(this.absAddr, temp & 0x00FF);
+		}
+		return 0;
+	}
+
+	NOP() { // ILLEGAL OPCODES
+		switch(this.opcode){} //TODO: Implement NOP timings
+		return 0;
+	}
+
+	// Instruction: Bitwise Logic OR
+	// Function:    A = A | M
+	// Flags Out:   N, Z
+	ORA() {
+		this.fetch();
+		this.a = this.a | this.fetched;
+		this.setFlag(this.flags.Z, this.a == 0x00);
+		this.setFlag(this.flags.N, this.a & 0x80);
+		return 1;		
+	}
+
+	PHA() { //pushes accumulator to the stack
+		this.write(0x0100 + this.stkp, this.a);
+		this.stkp--;
+		return 0;
+	}
+
+	// Instruction: Push Status Register to Stack
+	// Function:    status -> stack
+	// Note:        Break flag is set to 1 before push
+	PHP() {
+		this.write(0x0100 + this.stkp, this.status | this.flags.B);
+		this.setFlag(this.flags.B, 0);
+		this.setFlag(this.flags.U, 0);
+		this.stkp--;
+		return 0;
+	}
+
+	PLA() { //set the accumulator from the stackpointer
+		this.stkp++;
+		this.a = this.read(0x0100 + this.stkp);
+		this.setFlag(this.flags.Z, this.a == 0x00);
+		this.setFlag(this.flags.N, this.a & 0x80);
+		return 0;
+	}
+
+	// Instruction: Pop Status Register off Stack
+	// Function:    Status <- stack
+	PLP() {
+		this.stkp++;
+		this.status = this.read(0x0100 + this.stkp);
+		this.setFlag(this.flags.U, 1);
+		return 0;
+	}
+
+	ROL() {
+		this.fetch();
+		let temp = (this.fetched << 1 | this.getFlag(this.flags.C));
+		this.setFlag(this.flags.C, temp & 0xFF00);
+		this.setFlag(this.flags.Z, (temp & 0x00FF) == 0x0000);
+		this.setFlag(this.flags.N, temp & 0x0080);
+		if(this.lookup[this.opcode][2] == this.IMP){
+			this.a = temp & 0x00FF;
+		}else {
+			this.write(this.absAddr, temp & 0x00FF);
+		}
+		return 0;
+	}
+
+	ROR() {
+		this.fetch();
+		let temp = (this.fetched >> 1) | (this.getFlag(this.flags.C) << 7);
+		this.setFlag(this.flags.C, this.fetched & 0x01);
+		this.setFlag(this.flags.Z, (temp & 0x00FF) == 0x00);
+		this.setFlag(this.flags.N, temp & 0x0080);
+		if(this.lookup[this.opcode][2] == this.IMP){
+			this.a = temp & 0x00FF;
+		}else {
+			this.write(this.absAddr, temp & 0x00FF);
+		}
+		return 0;
+	}
+
+	RTI() { //runs after an interupt
+		this.stkp++;
+		this.status = this.read(0x0100 + this.stkp);
+		this.status &= ~this.getFlag(this.flags.B);
+		this.status &= ~this.getFlag(this.flags.U);
+
+		this.stkp++;
+		this.pc = this.read(0x0100 + this.stkp);
+		this.stkp++;
+		this.pc |= this.read(0x0100 + this.stkp) << 8;
+		return 0;
+	}
+
+	RTS() {
+		this.stkp++;
+		this.pc = this.read(0x0100 + this.stkp);
+		this.stkp++;
+		this.pc |= this.read(0x0100 + this.stkp) << 8;
+
+		this.pc++;
+		return 0;
+	}
+
+	SEC() { //set carry flag
+		this.setFlag(this.flags.C, true);
+		return 0;
+	}
+
+	SED() {
+		this.setFlag(this.flags.D, true);
+		return 0;
+	}
+
+	SEI() {
+		this.setFlag(this.flags.I, true);
+		return 0;
+	}
+
+	STA() {//store A in memory 
+		this.write(this.absAddr, this.a);
+		return 0;
+	}
+
+	STX() {//store A in memory 
+		this.write(this.absAddr, this.x);
+		return 0;
+	}
+
+	STY() {//store y in memory 
+		this.write(this.absAddr, this.y);
+		return 0;
+	}
+
+	
 }
 
 class Bus {   //the bus. connects stuff
