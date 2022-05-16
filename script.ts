@@ -256,7 +256,7 @@ class olc6502 { //the cpu
 
     //helper function that will grab data and store it in the fetched variable
     fetch() {
-        if(this.lookup[this.opcode] != this.IMP){
+        if(this.lookup[this.opcode][2] != this.IMP){ //lily ensure this works asap
             this.fetched = this.read(this.absAddr);
         }
         return this.fetched;
@@ -283,6 +283,19 @@ class olc6502 { //the cpu
         }
         return 0;
     }
+
+	BEQ() { //branch if equal
+		this.getFlag(this.flags.Z == 1){
+			this.cycles++;
+			this.absAddr = this.pc + this.relAddr;
+			if((this.absAddr & 0xFF00) != (this.pc & 0xFF00)) {
+                this.cycles++;
+            }
+
+			this.pc = this.absAddr;
+		}
+		return 0;
+	}
 
     CLC() { //clear carry flag
         this.setFlag(this.flags.C, false);
