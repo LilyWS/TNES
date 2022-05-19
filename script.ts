@@ -1,4 +1,4 @@
-class olc6502 { //the cpu
+class olc6502 { //the cpu find test programs at https://codegolf.stackexchange.com/questions/12844/emulate-a-mos-6502-cpu
     bus: Bus;
     flags: Object;
     a: number;
@@ -824,7 +824,53 @@ class olc6502 { //the cpu
 		return 0;
 	}
 
+	// Instruction: Transfer Accumulator to X Register
+	// Function:    X = A
+	// Flags Out:   N, Z
+	TAX() {
+		this.x = this.a;
+		this.setFlag(this.flags.Z, this.x == 0x00);
+		this.setFlag(this.flags.N, this.x & 0x80);
+		return 0;
+	}
 	
+	TAY() {
+		this.y = this.a;
+		this.setFlag(this.flags.Z, this.y == 0x00);
+		this.setFlag(this.flags.N, this.y & 0x80);
+		return 0;
+	}
+
+	TSX() { //transfer stack pointer to x
+		this.x = this.stkp;
+		this.setFlag(this.flags.Z, this.x == 0x00);
+		this.setFlag(this.flags.N, this.x & 0x80);
+		return 0;
+	}
+	
+	TXA() { //transfer x to accumulator
+		this.a = this.x;
+		this.setFlag(this.flags.Z, this.a == 0x00);
+		this.setFlag(this.flags.N, this.a & 0x80);
+		return 0;
+	}
+	
+	TXS() { //transfer x to stack pointer 
+		this.stkp = this.x;
+		return 0;
+	}
+	
+	TYA() { //transfer y to accumulator
+		this.a = this.y;
+		this.setFlag(this.flags.Z, this.a == 0x00);
+		this.setFlag(this.flags.N, this.a & 0x80);
+		return 0;
+	}
+	
+	//capture all illegal opcodes
+	XXX() {
+		return 0;
+	}
 }
 
 class Bus {   //the bus. connects stuff
@@ -854,3 +900,8 @@ var cpu: olc6502 = new olc6502();
 var bus: Bus = new Bus();
 
 cpu.connectBus(bus);
+
+bus.write(0, 23);
+console.log(cpu.pc);
+cpu.clock();
+console.log(cpu.pc);
