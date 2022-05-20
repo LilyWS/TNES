@@ -44,7 +44,7 @@ class olc6502 { //the cpu find test programs at https://codegolf.stackexchange.c
         //A lookup table for all legal opcodes.
         //String name of opcode, opcode function, addressing mode, and then number of clock cycles the opcode takes
         this.lookup = 	[
-			[ "BRK", this.BRK, this.IMM, 7 ],[ "ORA", this.ORA, this.IZX, 6 ],[ "???", this.XXX, this.IMP, 2 ],[ "???", this.XXX, this.IMP, 8 ],[ "???", this.NOP, this.IMP, 3 ],[ "ORA", this.ORA, this.ZP0, 3 ],[ "ASL", this.ASL, this.ZP0, 5 ],[ "???", this.XXX, this.IMP, 5 ],[ "PHP", this.PHP, this.IMP, 3 ],[ "ORA", this.ORA, this.IMM, 2 ],[ "ASL", this.ASL, this.IMP, 2 ],[ "???", this.XXX, this.IMP, 2 ],[ "???", this.NOP, this.IMP, 4 ],[ "ORA", this.ORA, this.ABS, 4 ],[ "ASL", this.ASL, this.ABS, 6 ],[ "???", this.XXX, this.IMP, 6 ],
+			[ "BRK", this.BRK, this.IMP, 7 ],[ "ORA", this.ORA, this.IZX, 6 ],[ "???", this.XXX, this.IMP, 2 ],[ "???", this.XXX, this.IMP, 8 ],[ "???", this.NOP, this.IMP, 3 ],[ "ORA", this.ORA, this.ZP0, 3 ],[ "ASL", this.ASL, this.ZP0, 5 ],[ "???", this.XXX, this.IMP, 5 ],[ "PHP", this.PHP, this.IMP, 3 ],[ "ORA", this.ORA, this.IMM, 2 ],[ "ASL", this.ASL, this.IMP, 2 ],[ "???", this.XXX, this.IMP, 2 ],[ "???", this.NOP, this.IMP, 4 ],[ "ORA", this.ORA, this.ABS, 4 ],[ "ASL", this.ASL, this.ABS, 6 ],[ "???", this.XXX, this.IMP, 6 ],
 			[ "BPL", this.BPL, this.REL, 2 ],[ "ORA", this.ORA, this.IZY, 5 ],[ "???", this.XXX, this.IMP, 2 ],[ "???", this.XXX, this.IMP, 8 ],[ "???", this.NOP, this.IMP, 4 ],[ "ORA", this.ORA, this.ZPX, 4 ],[ "ASL", this.ASL, this.ZPX, 6 ],[ "???", this.XXX, this.IMP, 6 ],[ "CLC", this.CLC, this.IMP, 2 ],[ "ORA", this.ORA, this.ABY, 4 ],[ "???", this.NOP, this.IMP, 2 ],[ "???", this.XXX, this.IMP, 7 ],[ "???", this.NOP, this.IMP, 4 ],[ "ORA", this.ORA, this.ABX, 4 ],[ "ASL", this.ASL, this.ABX, 7 ],[ "???", this.XXX, this.IMP, 7 ],
 			[ "JSR", this.JSR, this.ABS, 6 ],[ "AND", this.AND, this.IZX, 6 ],[ "???", this.XXX, this.IMP, 2 ],[ "???", this.XXX, this.IMP, 8 ],[ "BIT", this.BIT, this.ZP0, 3 ],[ "AND", this.AND, this.ZP0, 3 ],[ "ROL", this.ROL, this.ZP0, 5 ],[ "???", this.XXX, this.IMP, 5 ],[ "PLP", this.PLP, this.IMP, 4 ],[ "AND", this.AND, this.IMM, 2 ],[ "ROL", this.ROL, this.IMP, 2 ],[ "???", this.XXX, this.IMP, 2 ],[ "BIT", this.BIT, this.ABS, 4 ],[ "AND", this.AND, this.ABS, 4 ],[ "ROL", this.ROL, this.ABS, 6 ],[ "???", this.XXX, this.IMP, 6 ],
 			[ "BMI", this.BMI, this.REL, 2 ],[ "AND", this.AND, this.IZY, 5 ],[ "???", this.XXX, this.IMP, 2 ],[ "???", this.XXX, this.IMP, 8 ],[ "???", this.NOP, this.IMP, 4 ],[ "AND", this.AND, this.ZPX, 4 ],[ "ROL", this.ROL, this.ZPX, 6 ],[ "???", this.XXX, this.IMP, 6 ],[ "SEC", this.SEC, this.IMP, 2 ],[ "AND", this.AND, this.ABY, 4 ],[ "???", this.NOP, this.IMP, 2 ],[ "???", this.XXX, this.IMP, 7 ],[ "???", this.NOP, this.IMP, 4 ],[ "AND", this.AND, this.ABX, 4 ],[ "ROL", this.ROL, this.ABX, 7 ],[ "???", this.XXX, this.IMP, 7 ],
@@ -96,21 +96,21 @@ class olc6502 { //the cpu find test programs at https://codegolf.stackexchange.c
 	// IZX(){}; IZY(){};
 
     //op codes, 56 total. Only emulating legal ones
-    ADC(){};	AND(){};	ASL(){};	BCC(){};
-	BCS(){};	BEQ(){};	BIT(){};	BMI(){};
-	BNE(){};	BPL(){};	BRK(){};	BVC(){};
-	BVS(){};	CLC(){};	CLD(){};	CLI(){};
-	CLV(){};	CMP(){};	CPX(){};	CPY(){};
-	DEC(){};	DEX(){};	DEY(){};	EOR(){};
-	INC(){};	INX(){};	INY(){};	JMP(){};
-	JSR(){};	LDA(){};	LDX(){};	LDY(){};
-	LSR(){};	NOP(){};	ORA(){};	PHA(){};
-	PHP(){};	PLA(){};	PLP(){};	ROL(){};
-	ROR(){};	RTI(){};	RTS(){};	SBC(){};
-	SEC(){};	SED(){};	SEI(){};	STA(){};
-	STX(){};	STY(){};	TAX(){};	TAY(){};
-	TSX(){};	TXA(){};	TXS(){};	TYA(){};
-	XXX(){}; //this function will catch all unofficial opcodes and as a NOP call
+    // ADC(){};	AND(){};	ASL(){};	BCC(){};
+	// BCS(){};	BEQ(){};	BIT(){};	BMI(){};
+	// BNE(){};	BPL(){};	BRK(){};	BVC(){};
+	// BVS(){};	CLC(){};	CLD(){};	CLI(){};
+	// CLV(){};	CMP(){};	CPX(){};	CPY(){};
+	// DEC(){};	DEX(){};	DEY(){};	EOR(){};
+	// INC(){};	INX(){};	INY(){};	JMP(){};
+	// JSR(){};	LDA(){};	LDX(){};	LDY(){};
+	// LSR(){};	NOP(){};	ORA(){};	PHA(){};
+	// PHP(){};	PLA(){};	PLP(){};	ROL(){};
+	// ROR(){};	RTI(){};	RTS(){};	SBC(){};
+	// SEC(){};	SED(){};	SEI(){};	STA(){};
+	// STX(){};	STY(){};	TAX(){};	TAY(){};
+	// TSX(){};	TXA(){};	TXS(){};	TYA(){};
+	// XXX(){}; //this function will catch all unofficial opcodes and as a NOP call
     
     // these three functions are asynchronous. they are activated externally and will change the state of the cpu. 
     reset() { //pass a reset signal
@@ -181,13 +181,12 @@ class olc6502 { //the cpu find test programs at https://codegolf.stackexchange.c
 			this.opcode = this.read(this.pc); 
             this.pc++;
 
-			console.log("ran clock cycle");
             let opc = this.lookup[this.opcode]; //stores the opcode we need
 
             this.cycles = opc[3] as number;
 
-            let ac1 = opc[2](); // find out if both methods request additional cycles
-			let ac2 = opc[1]();
+            let ac1 = opc[2].bind(this)(); // find out if both methods request additional cycles
+			let ac2 = opc[1].bind(this)();
 
             this.cycles += (ac1 & ac2);
 
@@ -901,7 +900,45 @@ var bus: Bus = new Bus();
 
 cpu.connectBus(bus);
 
-bus.write(0, 23);
 console.log(cpu.pc);
-cpu.clock();
 console.log(cpu.pc);
+var rom: string = "A20A8E0000A2038E0100AC0000A900186D010088D0FA8D0200EAEAEA";
+var offset: number = 0x8000;
+
+//this will likely need a lot of tweaking but might just work for now
+function loadRom(rom: string, offset: number) {
+	for (let i=0; i<rom.length; i+=2){
+		bus.ram[offset++] = parseInt(rom.substring(i,i+2), 16);
+	}
+	//set reset vector
+	bus.ram[0xFFFC] = 0x00;
+	bus.ram[0xFFFD] = 0x80;
+
+	cpu.reset();
+}
+
+document.addEventListener("keydown", keyDownHandler, false);
+
+function keyDownHandler(e){
+	if(e.keyCode == 32) {
+		cpu.clock();
+	}
+}
+
+/* test program. compile at https://www.masswerk.at/6502/assembler.html 
+*=$8000
+LDX #10
+STX $0000
+LDX #3
+STX $0001
+LDY $0000
+LDA #0
+CLC
+loop
+ADC $0001
+DEY
+BNE loop
+STA $0002
+NOP
+NOP
+NOP */
