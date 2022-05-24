@@ -1,4 +1,6 @@
-class olc6502 { //the cpu find test programs at https://codegolf.stackexchange.com/questions/12844/emulate-a-mos-6502-cpu
+import { NumberLiteralType } from "typescript";
+
+class mos6502 { //the cpu find test programs at https://codegolf.stackexchange.com/questions/12844/emulate-a-mos-6502-cpu
     bus: Bus;
     flags: Object;
     a: number;
@@ -68,11 +70,11 @@ class olc6502 { //the cpu find test programs at https://codegolf.stackexchange.c
     }
 
     write(addr: number, val: number) {
-        this.bus.write(addr, val);
+        this.bus.cpuWrite(addr, val);
     }
 
     read(addr: number) {
-        return this.bus.read(addr);
+        return this.bus.cpuRead(addr);
     }
 
     getFlag(i: number) { //check the and of the flags
@@ -872,31 +874,288 @@ class olc6502 { //the cpu find test programs at https://codegolf.stackexchange.c
 	}
 }
 
-class Bus {   //the bus. connects stuff
-    ram: number[];
-    constructor() {
-		this.ram = [0];//create a 64k test ram and set its contents to 0
-		for(let i=0;i<64*1024;i++){
-			this.ram[i] = 0;
+class PPU { //pixel procccessing unit. connects to the cpu bus but also has its smaller bus it can connect to 
+	cartridge: Cartridge;
+	nameTable: number[][]; //vram
+	paletteTable: number[]; //stores pallete information
+	constructor() {
+		this.paletteTable = [0]; //stores 32 bytes
+		this.nameTable = [[0]]; //one name table is 1kb. nes can store 2;
+		for(let i=0;i<2;i++){
+			this.nameTable[i] = [0];
+			for(let j=0;j<1024;j++){
+				this.nameTable[i][j] = 0;
+			}
 		}
 	}
 
-    write(addr: number, val: number) {
-        if(addr >= 0x0000 && addr <= 0xFFFF){
-			this.ram[addr] = val;
+	cpuRead(addr: number){
+		let data = 0x00;
+		switch(addr){
+			case 0x0000: // Control
+				break;
+			case 0x0001: // Mask
+				break;
+			case 0x0002: // Status
+				break;
+			case 0x0003: // OAM Address
+				break;
+			case 0x0004: // OAM Data
+				break;
+			case 0x0005: // Scroll
+				break;
+			case 0x0006: // PPU Address
+				break;
+			case 0x0007: // PPU Data
+				break;
 		}
-    }
+		return data
+	};
+	cpuWrite(addr: number, val: number){
+		switch(addr){
+			case 0x0000: // Control
+				break;
+			case 0x0001: // Mask
+				break;
+			case 0x0002: // Status
+				break;
+			case 0x0003: // OAM Address
+				break;
+			case 0x0004: // OAM Data
+				break;
+			case 0x0005: // Scroll
+				break;
+			case 0x0006: // PPU Address
+				break;
+			case 0x0007: // PPU Data
+				break;
+		}
+	};
+	ppuRead(addr: number){
+		let data = 0x00;
+		addr &= 0x3FFF;
+		
+		if(this.cartridge.ppuRead(addr)){
 
-    read(addr: number) {
-        if(addr >= 0x0000 && addr <= 0xFFFF){
-			return this.ram[addr];
 		}
-        return 0x00;
-    }
+		
+		return data
+	};
+	ppuWrite(addr: number, val: number){;
+		addr &= 0x3FFF;
+		if(this.cartridge.ppuWrite(addr, val)){
+			
+		}
+	}
+
+	connectCartridge(cart: Cartridge) {
+		this.cartridge = cart;
+	}
+
+	clock() {
+
+	}
+
 }
 
-var cpu: olc6502 = new olc6502();
+class Mapper { //super class for all mappers to be based off of 
+	PRGBanks: number;
+	CHRBanks: number;
+
+	constructor(pBanks: number, cBanks: number) {
+		this.PRGBanks = pBanks;
+		this.CHRBanks = cBanks;
+	}
+
+	//virtual functions to be overwritten in extensions of classes
+	cpuRead(addr: number){};
+	cpuWrite(addr: number, val: number){};
+	ppuRead(addr: number){};
+	ppuWrite(addr: number, val: number){};
+}
+
+class Mapper_000 extends Mapper {
+	
+}
+
+interface romHeader {
+	name: string;
+	prgRomChunks: number; //size of prg rom in 16kb units
+	chrRomChunks: number; //size of chr rom in 8kb units
+	mapper1: number;
+	mapper2: number;
+	prgRamSize: number;
+	tvSystem1: number;
+	tvSystem2: number;
+	unused: string;
+}
+
+class Cartridge {
+	PRGMem: number[]; //program memory for CPU
+	CHRMem: number[]; //graphical data for PPU
+	
+	mapperID: number; //which mapper are we using?
+	mirror: string;
+	PRGBanks: number; //how many prg banks?
+	CHRBanks: number; //how many chr banks?
+
+	header: romHeader //header struct for nes roms (iNES format)
+
+	constructor() {
+		this.header = 	{
+			name: "",
+			prgRomChunks: 0,//size of prg rom in 16kb units
+			chrRomChunks: 0, //size of chr rom in 8kb units
+			mapper1: 0,
+			mapper2: 0,
+			prgRamSize: 0,
+			tvSystem1: 0,
+			tvSystem2: 0,
+			unused: ""
+		}
+		this.PRGBanks = 0;
+		this.PRGMem = [0];
+		this.CHRBanks = 0;
+		this.CHRMem = [0];
+		this.mirror = "";//handles mirroring for the nametable which is responsible for displaying backgrounds
+	}
+
+	initCartridge(data: Uint8Array) {
+		let cartridgePntr = 16; //we will init header using a for loop but after that we will rely on this var to point to where we want to read from the cartride;
+		//get header
+		for(let i=0; i<16; i++){
+			if(i<3){ //set name
+				this.header.name += data[i].toString(16);
+			}else if(i==4){
+				this.header.prgRomChunks = data[i];
+			}else if(i==5){
+				this.header.chrRomChunks = data[i];
+			}else if(i==6){
+				this.header.mapper1 = data[i];
+			}else if(i==7){
+				this.header.mapper2 = data[i];
+			}else if(i==8){
+				this.header.prgRamSize = data[i];
+			}else if(i==9){
+				this.header.tvSystem1 = data[i];
+			}else if(i==10){
+				this.header.tvSystem2 = data[i];
+			}else if(i>10){
+				this.header.unused += data[i].toString(16);
+			}
+		}
+		console.log(this.header);
+
+		if(this.header.mapper1 & 0x04) { //checks if "trainer" exists. if it does we skip past it;
+			cartridgePntr += 512; //Lily this may be an inanaccurate please check back if things dont work
+		}
+
+		this.mirror = this.header.mapper1 & 0x01 ? "vertical" : "horizontal";
+
+		//get mapper id. mapper 2 stores the upper nybble and mapper 1 stores the lower nyble of the id
+		this.mapperID = ((this.header.mapper2 >> 4) << 4) | (this.header.mapper1 >> 4);
+
+		//get type of our iNES file. for now we will only deal with type1
+		let nFileType = 1;
+
+		if (nFileType == 0) {
+
+		}
+
+		if(nFileType == 1) {
+			this.PRGBanks = this.header.prgRomChunks; //get size of prg memory and then read it in from the rom
+			for(let i=0;i<this.PRGBanks*16384;i++){
+				this.PRGMem[i] = data[cartridgePntr];
+				cartridgePntr++;
+			}
+			this.CHRBanks = this.header.chrRomChunks; //get size of prg memory and then read it in from the rom
+			for(let i=0;i<this.CHRBanks*8192;i++){
+				this.CHRMem[i] = data[cartridgePntr];
+				cartridgePntr++;
+			}
+
+			console.log(this);
+		}
+
+		if(nFileType == 2) {
+
+		}
+
+	}
+
+	//will hijack read/writes from the bus/ppu if the addr is within the cartridges range
+	cpuRead(val: number) {
+		return false;
+	};
+	cpuWrite(addr: number, val: number) {
+		return false;
+	};
+	ppuRead(val: number) {
+		return false;
+	};
+	ppuWrite(addr: number, val: number) {
+		return false;
+	};
+}
+
+class Bus {   //the bus. connects stuff
+    cpuRam: number[];
+	cpu: mos6502;
+	cartridge: Cartridge;
+	ppu: PPU;
+	clockCounter: number;
+    constructor() {
+		this.cpuRam = [0];//2kb ram for the CPU
+		this.clockCounter = 0; 
+		for(let i=0;i<2048;i++){
+			this.cpuRam[i] = 0;
+		}
+	}
+
+    cpuWrite(addr: number, val: number) {
+		if(this.cartridge.cpuWrite(addr, val)){
+			//check if cpu write is in cartridge address range
+		}else if(addr >= 0x0000 && addr <= 0x1FFF){
+			this.cpuRam[addr & 0x07FF] = val;
+		}else if(addr >= 0x2000 && addr <= 0x3FFF){
+			this.ppu.cpuWrite(addr & 0x0007, val);
+		}
+    }
+
+    cpuRead(addr: number) {
+		let data = 0x00;
+        if(this.cartridge.cpuRead(addr)){
+			//check if cpu read is in cartridge address range
+		}else if(addr >= 0x0000 && addr <= 0x1FFF){
+			data = this.cpuRam[addr & 0x07FF] // implements mirroring for the 8kb addressable range of the cpu ram 
+		}else if(addr >= 0x2000 && addr <= 0x3FFF){
+			data = this.ppu.cpuRead(addr & 0x0007);
+		}
+	
+        return data;
+    }
+
+	//system functions
+	insertCartridge(cart: Cartridge) {
+		this.cartridge = cart;
+		this.ppu.connectCartridge(cart);
+	}
+
+	reset() {
+		this.cpu.reset();
+		this.clockCounter = 0;
+	}
+
+	clock() {
+
+	}
+	
+}
+
+var cpu: mos6502 = new mos6502();
+var ppu: PPU = new PPU();
 var bus: Bus = new Bus();
+var cart: Cartridge = new Cartridge();
 
 cpu.connectBus(bus);
 
@@ -913,21 +1172,21 @@ romInput.addEventListener('change', function () {
     console.log(romInput.files);
     console.log(fr);
     fr.onload = function () {
-        console.log("shio");
         console.log(fr.result);
+		cart.initCartridge(new Uint8Array(fr.result as ArrayBuffer)); //pass the cartridge class the rom's binary data in UInt8 format
         //console.log(romInput);
     };
-    fr.readAsText(romInput.files[0]);
+    fr.readAsArrayBuffer(romInput.files[0]);
 });
 
 //this will likely need a lot of tweaking but might just work for now
 function loadRom(rom: string, offset: number) {
 	for (let i=0; i<rom.length; i+=2){
-		bus.ram[offset++] = parseInt(rom.substring(i,i+2), 16);
+		bus.cpuRam[offset++] = parseInt(rom.substring(i,i+2), 16);
 	}
 	//set reset vector
-	bus.ram[0xFFFC] = 0x00;
-	bus.ram[0xFFFD] = 0x80;
+	bus.cpuRam[0xFFFC] = 0x00;
+	bus.cpuRam[0xFFFD] = 0x80;
 
 	cpu.reset();
 	cpu.pc = 0x8000;
