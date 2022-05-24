@@ -63,7 +63,7 @@ class olc6502 { //the cpu find test programs at https://codegolf.stackexchange.c
 		];
     }
 
-    connectBus(bus: Bus) {
+    connectBus(bus: typeof Bus) {
         this.bus = bus;
     }
 
@@ -83,7 +83,7 @@ class olc6502 { //the cpu find test programs at https://codegolf.stackexchange.c
 		if(i2){
 			this.status |= i;
 		}else{
-			this.status &= ~i2;
+			this.status &= ~i;
 		}
 	}
 
@@ -182,7 +182,7 @@ class olc6502 { //the cpu find test programs at https://codegolf.stackexchange.c
             this.pc++;
 
             let opc = this.lookup[this.opcode]; //stores the opcode we need
-
+			console.log(opc[0]);
             this.cycles = opc[3] as number;
 
             let ac1 = opc[2].bind(this)(); // find out if both methods request additional cycles
@@ -305,7 +305,7 @@ class olc6502 { //the cpu find test programs at https://codegolf.stackexchange.c
         this.relAddr = this.read(this.pc);
         this.pc++;
         if(this.relAddr & 0x80) { //checking if byte 7 is equal to 1. if it is we jump backwards instead of forwards
-            this.relAddr |= 0xFF00;
+            this.relAddr -= 256;
         }
         return 0;
     }
@@ -905,6 +905,21 @@ console.log(cpu.pc);
 var rom: string = "A20A8E0000A2038E0100AC0000A900186D010088D0FA8D0200EAEAEA";
 var offset: number = 0x8000;
 
+var fr = new FileReader();
+var romInput = document.getElementById('inputfile');
+romInput.addEventListener('change', function () {
+    var fr = new FileReader();
+    //fr.readAsText(this.files[0]);
+    console.log(romInput.files);
+    console.log(fr);
+    fr.onload = function () {
+        console.log("shio");
+        console.log(fr.result);
+        //console.log(romInput);
+    };
+    fr.readAsText(romInput.files[0]);
+});
+
 //this will likely need a lot of tweaking but might just work for now
 function loadRom(rom: string, offset: number) {
 	for (let i=0; i<rom.length; i+=2){
@@ -915,13 +930,24 @@ function loadRom(rom: string, offset: number) {
 	bus.ram[0xFFFD] = 0x80;
 
 	cpu.reset();
+	cpu.pc = 0x8000;
 }
+
+loadRom(rom, offset);
 
 document.addEventListener("keydown", keyDownHandler, false);
 
+var cpuDisplay = document.getElementById("cpuDisplay");
+
+function renderCpuDisplay(display){
+	console.log(display);
+}
+
 function keyDownHandler(e){
 	if(e.keyCode == 32) {
+		cpu.cycles = 0;
 		cpu.clock();
+		renderCpuDisplay(cpuDisplay);
 	}
 }
 

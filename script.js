@@ -60,7 +60,7 @@ var olc6502 = /** @class */ (function () {
             this.status |= i;
         }
         else {
-            this.status &= ~i2;
+            this.status &= ~i;
         }
     };
     //defining all 12 addressing modes for the cpu
@@ -88,7 +88,6 @@ var olc6502 = /** @class */ (function () {
     // XXX(){}; //this function will catch all unofficial opcodes and as a NOP call
     // these three functions are asynchronous. they are activated externally and will change the state of the cpu. 
     olc6502.prototype.reset = function () {
-        console.log(this);
         this.absAddr = 0xFFFC;
         var lo = this.read(this.absAddr + 0);
         var hi = this.read(this.absAddr + 1);
@@ -141,7 +140,6 @@ var olc6502 = /** @class */ (function () {
     };
     ;
     olc6502.prototype.clock = function () {
-        console.log("hi");
         if (this.cycles == 0) { //if its time for next opcode
             //read the current opcode and increment the programcounter
             this.opcode = this.read(this.pc);
@@ -260,7 +258,7 @@ var olc6502 = /** @class */ (function () {
         this.relAddr = this.read(this.pc);
         this.pc++;
         if (this.relAddr & 0x80) { //checking if byte 7 is equal to 1. if it is we jump backwards instead of forwards
-            this.relAddr |= 0xFF00;
+            this.relAddr -= 256;
         }
         return 0;
     };
@@ -775,26 +773,43 @@ console.log(cpu.pc);
 console.log(cpu.pc);
 var rom = "A20A8E0000A2038E0100AC0000A900186D010088D0FA8D0200EAEAEA";
 var offset = 0x8000;
+var fr = new FileReader();
+var romInput = document.getElementById('inputfile');
+romInput.addEventListener('change', function () {
+    var fr = new FileReader();
+    //fr.readAsText(this.files[0]);
+    console.log(romInput.files);
+    console.log(fr);
+    fr.onload = function () {
+        console.log("shio");
+        console.log(fr.result);
+        //console.log(romInput);
+    };
+    fr.readAsText(romInput.files[0]);
+});
 //this will likely need a lot of tweaking but might just work for now
 function loadRom(rom, offset) {
     for (var i = 0; i < rom.length; i += 2) {
         bus.ram[offset++] = parseInt(rom.substring(i, i + 2), 16);
     }
-    console.log(offset);
     //set reset vector
     bus.ram[0xFFFC] = 0x00;
     bus.ram[0xFFFD] = 0x80;
     cpu.reset();
     cpu.pc = 0x8000;
-
 }
-
 loadRom(rom, offset);
-
 document.addEventListener("keydown", keyDownHandler, false);
+var cpuDisplay = document.getElementById("cpuDisplay");
+function renderCpuDisplay(display) {
+    console.log(display.querySelector('#cpuStatusDisplay'));
+    display.querySelector("#cpuStatusDisplay").innerText = cpu.status.toString(2);
+}
 function keyDownHandler(e) {
     if (e.keyCode == 32) {
+        cpu.cycles = 0;
         cpu.clock();
+        renderCpuDisplay(cpuDisplay);
     }
 }
 /* test program. compile at https://www.masswerk.at/6502/assembler.html
