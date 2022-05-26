@@ -1,3 +1,18 @@
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (Object.prototype.hasOwnProperty.call(b, p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    };
+    return function (d, b) {
+        if (typeof b !== "function" && b !== null)
+            throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 var mos6502 = /** @class */ (function () {
     function mos6502() {
         this.flags = {
@@ -804,12 +819,16 @@ var PPU = /** @class */ (function () {
     PPU.prototype.ppuRead = function (addr) {
         var data = 0x00;
         addr &= 0x3FFF;
+        if (this.cartridge.ppuRead(addr)) {
+        }
         return data;
     };
     ;
     PPU.prototype.ppuWrite = function (addr, val) {
         ;
         addr &= 0x3FFF;
+        if (this.cartridge.ppuWrite(addr, val)) {
+        }
     };
     PPU.prototype.connectCartridge = function (cart) {
         this.cartridge = cart;
@@ -818,6 +837,57 @@ var PPU = /** @class */ (function () {
     };
     return PPU;
 }());
+var Mapper = /** @class */ (function () {
+    function Mapper(pBanks, cBanks) {
+        this.PRGBanks = pBanks;
+        this.CHRBanks = cBanks;
+    }
+    //virtual functions to be overwritten in extensions of this class
+    Mapper.prototype.cpuMapRead = function (addr) { };
+    ;
+    Mapper.prototype.cpuMapWrite = function (addr) { };
+    ;
+    Mapper.prototype.ppuMapRead = function (addr) { };
+    ;
+    Mapper.prototype.ppuMapWrite = function (addr) { };
+    ;
+    return Mapper;
+}());
+var Mapper_000 = /** @class */ (function (_super) {
+    __extends(Mapper_000, _super);
+    function Mapper_000(pBanks, cBanks) {
+        return _super.call(this, pBanks, cBanks) || this;
+    }
+    Mapper_000.prototype.cpuMapRead = function (addr) {
+        if (addr >= 0x8000 && addr <= 0xFFFF) {
+            var mappedAddr = addr & (this.PRGBanks > 1 ? 0x7FFF : 0x3FFF);
+            return mappedAddr;
+        }
+        return -1;
+    };
+    ;
+    Mapper_000.prototype.cpuMapWrite = function (addr) {
+        ;
+        if (addr >= 0x8000 && addr <= 0xFFFF) {
+            var mappedAddr = addr & (this.PRGBanks > 1 ? 0x7FFF : 0x3FFF);
+            return mappedAddr;
+        }
+        return -1;
+    };
+    Mapper_000.prototype.ppuMapRead = function (addr) {
+        if (addr >= 0x0000 && addr <= 0x1FFF) {
+            var mappedAddr = addr;
+            return mappedAddr;
+        }
+        return -1;
+    };
+    ;
+    Mapper_000.prototype.ppuMapWrite = function (addr) {
+        return -1;
+    };
+    ;
+    return Mapper_000;
+}(Mapper));
 var Cartridge = /** @class */ (function () {
     function Cartridge() {
         this.header = {
@@ -835,9 +905,11 @@ var Cartridge = /** @class */ (function () {
         this.PRGMem = [0];
         this.CHRBanks = 0;
         this.CHRMem = [0];
-        this.mirror = "";
+        this.mirror = ""; //handles mirroring for the nametable which is responsible for displaying backgrounds
     }
-    Cartridge.prototype.initCartridge = function (data) {
+    Cartridge.prototype.initCartridge = function (data, bus) {
+        console.log(this);
+        bus.insertCartridge(this);
         var cartridgePntr = 16; //we will init header using a for loop but after that we will rely on this var to point to where we want to read from the cartride;
         //get header
         for (var i = 0; i < 16; i++) {
@@ -873,6 +945,7 @@ var Cartridge = /** @class */ (function () {
         if (this.header.mapper1 & 0x04) { //checks if "trainer" exists. if it does we skip past it;
             cartridgePntr += 512; //Lily this may be an inanaccurate please check back if things dont work
         }
+        this.mirror = this.header.mapper1 & 0x01 ? "vertical" : "horizontal";
         //get mapper id. mapper 2 stores the upper nybble and mapper 1 stores the lower nyble of the id
         this.mapperID = ((this.header.mapper2 >> 4) << 4) | (this.header.mapper1 >> 4);
         //get type of our iNES file. for now we will only deal with type1
@@ -894,15 +967,45 @@ var Cartridge = /** @class */ (function () {
         }
         if (nFileType == 2) {
         }
+        switch (this.mapperID) {
+            case 0:
+                this.mapper = new Mapper_000(this.header.prgRomChunks, this.header.chrRomChunks);
+        }
     };
-    //will return whether or not the cartridge is handling that read or write as a boolean
-    Cartridge.prototype.cpuRead = function () { };
+    //will hijack read/writes from the bus/ppu if the addr is within the cartridges range
+    Cartridge.prototype.cpuRead = function (addr) {
+        var mappedAddr = this.mapper.cpuMapRead(addr);
+        var data = -1;
+        if (mappedAddr > -1) {
+            data = this.PRGMem[mappedAddr];
+        }
+        console.log(data);
+        return data;
+    };
     ;
-    Cartridge.prototype.cpuWrite = function () { };
+    Cartridge.prototype.cpuWrite = function (addr, val) {
+        var mappedAddr = this.mapper.cpuMapRead(addr);
+        if (mappedAddr > -1) {
+            this.PRGMem[mappedAddr] = val;
+            return true;
+        }
+        else {
+            return false;
+        }
+    };
     ;
-    Cartridge.prototype.ppuRead = function () { };
+    Cartridge.prototype.ppuRead = function (addr) {
+        var mappedAddr = this.mapper.ppuMapRead(addr);
+        var data = -1;
+        if (mappedAddr > -1) {
+            data = this.CHRMem[mappedAddr];
+        }
+        return data;
+    };
     ;
-    Cartridge.prototype.ppuWrite = function () { };
+    Cartridge.prototype.ppuWrite = function (addr, val) {
+        return false;
+    };
     ;
     return Cartridge;
 }());
@@ -915,7 +1018,10 @@ var Bus = /** @class */ (function () {
         }
     }
     Bus.prototype.cpuWrite = function (addr, val) {
-        if (addr >= 0x0000 && addr <= 0x1FFF) {
+        if (this.cartridge.cpuWrite(addr, val)) {
+            //check if cpu write is in cartridge address range
+        }
+        else if (addr >= 0x0000 && addr <= 0x1FFF) {
             this.cpuRam[addr & 0x07FF] = val;
         }
         else if (addr >= 0x2000 && addr <= 0x3FFF) {
@@ -924,7 +1030,12 @@ var Bus = /** @class */ (function () {
     };
     Bus.prototype.cpuRead = function (addr) {
         var data = 0x00;
-        if (addr >= 0x0000 && addr <= 0x1FFF) {
+        if (this.cartridge.cpuRead(addr) > -1) {
+            //check if cpu read is in cartridge address range
+            data = this.cartridge.cpuRead(addr);
+            console.log("bus:", data);
+        }
+        else if (addr >= 0x0000 && addr <= 0x1FFF) {
             data = this.cpuRam[addr & 0x07FF]; // implements mirroring for the 8kb addressable range of the cpu ram 
         }
         else if (addr >= 0x2000 && addr <= 0x3FFF) {
@@ -936,6 +1047,9 @@ var Bus = /** @class */ (function () {
     Bus.prototype.insertCartridge = function (cart) {
         this.cartridge = cart;
         this.ppu.connectCartridge(cart);
+    };
+    Bus.prototype.connectPPU = function (ppu) {
+        this.ppu = ppu;
     };
     Bus.prototype.reset = function () {
         this.cpu.reset();
@@ -950,6 +1064,7 @@ var ppu = new PPU();
 var bus = new Bus();
 var cart = new Cartridge();
 cpu.connectBus(bus);
+bus.connectPPU(ppu);
 console.log(cpu.pc);
 console.log(cpu.pc);
 var rom = "A20A8E0000A2038E0100AC0000A900186D010088D0FA8D0200EAEAEA";
@@ -963,23 +1078,23 @@ romInput.addEventListener('change', function () {
     console.log(fr);
     fr.onload = function () {
         console.log(fr.result);
-        cart.initCartridge(new Uint8Array(fr.result)); //pass the cartridge class the rom's binary data in UInt8 format
+        cart.initCartridge(new Uint8Array(fr.result), bus); //pass the cartridge class the rom's binary data in UInt8 format
         //console.log(romInput);
     };
     fr.readAsArrayBuffer(romInput.files[0]);
 });
-//this will likely need a lot of tweaking but might just work for now
-function loadRom(rom, offset) {
-    for (var i = 0; i < rom.length; i += 2) {
-        bus.cpuRam[offset++] = parseInt(rom.substring(i, i + 2), 16);
-    }
-    //set reset vector
-    bus.cpuRam[0xFFFC] = 0x00;
-    bus.cpuRam[0xFFFD] = 0x80;
-    cpu.reset();
-    cpu.pc = 0x8000;
-}
-loadRom(rom, offset);
+// //this will likely need a lot of tweaking but might just work for now
+// function loadRom(rom: string, offset: number) {
+// 	for (let i=0; i<rom.length; i+=2){
+// 		bus.cpuRam[offset++] = parseInt(rom.substring(i,i+2), 16);
+// 	}
+// 	//set reset vector
+// 	bus.cpuRam[0xFFFC] = 0x00;
+// 	bus.cpuRam[0xFFFD] = 0x80;
+// 	cpu.reset();
+// 	cpu.pc = 0x8000;
+// }
+// loadRom(rom, offset);
 document.addEventListener("keydown", keyDownHandler, false);
 var cpuDisplay = document.getElementById("cpuDisplay");
 function renderCpuDisplay(display) {

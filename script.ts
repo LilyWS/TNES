@@ -1,5 +1,3 @@
-import { NumberLiteralType } from "typescript";
-
 class mos6502 { //the cpu find test programs at https://codegolf.stackexchange.com/questions/12844/emulate-a-mos-6502-cpu
     bus: Bus;
     flags: Object;
@@ -967,15 +965,43 @@ class Mapper { //super class for all mappers to be based off of
 		this.CHRBanks = cBanks;
 	}
 
-	//virtual functions to be overwritten in extensions of classes
-	cpuRead(addr: number){};
-	cpuWrite(addr: number, val: number){};
-	ppuRead(addr: number){};
-	ppuWrite(addr: number, val: number){};
+	//virtual functions to be overwritten in extensions of this class
+	cpuMapRead(addr: number){};
+	cpuMapWrite(addr: number){};
+	ppuMapRead(addr: number){};
+	ppuMapWrite(addr: number){};
 }
 
 class Mapper_000 extends Mapper {
-	
+	constructor(pBanks: number, cBanks: number){
+		super(pBanks, cBanks);
+	}
+
+	cpuMapRead(addr: number){
+		if(addr >= 0x8000 && addr <= 0xFFFF){
+			let mappedAddr = addr & (this.PRGBanks > 1 ? 0x7FFF : 0x3FFF);
+			return mappedAddr;
+		}
+		return -1;
+	};
+	cpuMapWrite(addr: number){;
+		if(addr >= 0x8000 && addr <= 0xFFFF){
+			let mappedAddr = addr & (this.PRGBanks > 1 ? 0x7FFF : 0x3FFF);
+			return mappedAddr;
+		}
+		return -1;
+	}
+	ppuMapRead(addr: number){		
+		if(addr >= 0x0000 && addr <= 0x1FFF){
+			let mappedAddr = addr;
+			return mappedAddr;
+		}
+		return -1;
+	};
+	ppuMapWrite(addr: number){
+
+		return -1;
+	};
 }
 
 interface romHeader {
@@ -995,6 +1021,7 @@ class Cartridge {
 	CHRMem: number[]; //graphical data for PPU
 	
 	mapperID: number; //which mapper are we using?
+	mapper: Mapper; //reference to mapper for this cartridge
 	mirror: string;
 	PRGBanks: number; //how many prg banks?
 	CHRBanks: number; //how many chr banks?
@@ -1020,7 +1047,9 @@ class Cartridge {
 		this.mirror = "";//handles mirroring for the nametable which is responsible for displaying backgrounds
 	}
 
-	initCartridge(data: Uint8Array) {
+	initCartridge(data: Uint8Array, bus: Bus) {
+		console.log(this);
+		bus.insertCartridge(this);
 		let cartridgePntr = 16; //we will init header using a for loop but after that we will rely on this var to point to where we want to read from the cartride;
 		//get header
 		for(let i=0; i<16; i++){
@@ -1081,17 +1110,38 @@ class Cartridge {
 
 		}
 
+		switch(this.mapperID){
+			case 0:
+				this.mapper = new Mapper_000(this.header.prgRomChunks, this.header.chrRomChunks);
+		}
 	}
 
 	//will hijack read/writes from the bus/ppu if the addr is within the cartridges range
-	cpuRead(val: number) {
-		return false;
+	cpuRead(addr: number) {
+		let mappedAddr = this.mapper.cpuMapRead(addr);
+		let data = -1;
+		if(mappedAddr > -1){
+			data = this.PRGMem[mappedAddr];
+		}
+		console.log(data);
+		return data;
 	};
 	cpuWrite(addr: number, val: number) {
-		return false;
+		let mappedAddr = this.mapper.cpuMapRead(addr); 
+		if (mappedAddr > -1) {
+			this.PRGMem[mappedAddr] = val;
+			return true;
+		} else {
+			return false;
+		}
 	};
-	ppuRead(val: number) {
-		return false;
+	ppuRead(addr: number) {
+		let mappedAddr = this.mapper.ppuMapRead(addr);
+		let data = -1;
+		if(mappedAddr > -1){
+			data = this.CHRMem[mappedAddr];
+		}
+		return data;
 	};
 	ppuWrite(addr: number, val: number) {
 		return false;
@@ -1124,8 +1174,10 @@ class Bus {   //the bus. connects stuff
 
     cpuRead(addr: number) {
 		let data = 0x00;
-        if(this.cartridge.cpuRead(addr)){
+        if(this.cartridge.cpuRead(addr) > -1){
 			//check if cpu read is in cartridge address range
+			data = this.cartridge.cpuRead(addr);
+			console.log("bus:", data);
 		}else if(addr >= 0x0000 && addr <= 0x1FFF){
 			data = this.cpuRam[addr & 0x07FF] // implements mirroring for the 8kb addressable range of the cpu ram 
 		}else if(addr >= 0x2000 && addr <= 0x3FFF){
@@ -1139,6 +1191,10 @@ class Bus {   //the bus. connects stuff
 	insertCartridge(cart: Cartridge) {
 		this.cartridge = cart;
 		this.ppu.connectCartridge(cart);
+	}
+
+	connectPPU(ppu: PPU) {
+		this.ppu = ppu;
 	}
 
 	reset() {
@@ -1158,6 +1214,7 @@ var bus: Bus = new Bus();
 var cart: Cartridge = new Cartridge();
 
 cpu.connectBus(bus);
+bus.connectPPU(ppu);
 
 console.log(cpu.pc);
 console.log(cpu.pc);
@@ -1173,26 +1230,26 @@ romInput.addEventListener('change', function () {
     console.log(fr);
     fr.onload = function () {
         console.log(fr.result);
-		cart.initCartridge(new Uint8Array(fr.result as ArrayBuffer)); //pass the cartridge class the rom's binary data in UInt8 format
+		cart.initCartridge(new Uint8Array(fr.result as ArrayBuffer), bus); //pass the cartridge class the rom's binary data in UInt8 format
         //console.log(romInput);
     };
     fr.readAsArrayBuffer(romInput.files[0]);
 });
 
-//this will likely need a lot of tweaking but might just work for now
-function loadRom(rom: string, offset: number) {
-	for (let i=0; i<rom.length; i+=2){
-		bus.cpuRam[offset++] = parseInt(rom.substring(i,i+2), 16);
-	}
-	//set reset vector
-	bus.cpuRam[0xFFFC] = 0x00;
-	bus.cpuRam[0xFFFD] = 0x80;
+// //this will likely need a lot of tweaking but might just work for now
+// function loadRom(rom: string, offset: number) {
+// 	for (let i=0; i<rom.length; i+=2){
+// 		bus.cpuRam[offset++] = parseInt(rom.substring(i,i+2), 16);
+// 	}
+// 	//set reset vector
+// 	bus.cpuRam[0xFFFC] = 0x00;
+// 	bus.cpuRam[0xFFFD] = 0x80;
 
-	cpu.reset();
-	cpu.pc = 0x8000;
-}
+// 	cpu.reset();
+// 	cpu.pc = 0x8000;
+// }
 
-loadRom(rom, offset);
+// loadRom(rom, offset);
 
 document.addEventListener("keydown", keyDownHandler, false);
 
