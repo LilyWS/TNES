@@ -160,7 +160,6 @@ var mos6502 = /** @class */ (function () {
             this.opcode = this.read(this.pc);
             this.pc++;
             var opc = this.lookup[this.opcode]; //stores the opcode we need
-            console.log(opc[0]);
             this.cycles = opc[3];
             var ac1 = opc[2].bind(this)(); // find out if both methods request additional cycles
             var ac2 = opc[1].bind(this)();
@@ -454,6 +453,10 @@ var mos6502 = /** @class */ (function () {
     };
     mos6502.prototype.CLD = function () {
         this.setFlag(this.flags.D, false);
+        return 0;
+    };
+    mos6502.prototype.CLV = function () {
+        this.setFlag(this.flags.V, false);
         return 0;
     };
     // Instruction: Disable Interrupts / Clear Interrupt Flag
@@ -764,7 +767,77 @@ var mos6502 = /** @class */ (function () {
 var PPU = /** @class */ (function () {
     function PPU() {
         this.paletteTable = [0]; //stores 32 bytes
+        //set the pallete table colors
+        this.paletteTable[0x00] = "rgb(84, 84, 84)";
+        this.paletteTable[0x01] = "rgb(0, 30, 116)";
+        this.paletteTable[0x02] = "rgb(8, 16, 144)";
+        this.paletteTable[0x03] = "rgb(48, 0, 136)";
+        this.paletteTable[0x04] = "rgb(68, 0, 100)";
+        this.paletteTable[0x05] = "rgb(92, 0, 48)";
+        this.paletteTable[0x06] = "rgb(84, 4, 0)";
+        this.paletteTable[0x07] = "rgb(60, 24, 0)";
+        this.paletteTable[0x08] = "rgb(32, 42, 0)";
+        this.paletteTable[0x09] = "rgb(8, 58, 0)";
+        this.paletteTable[0x0A] = "rgb(0, 64, 0)";
+        this.paletteTable[0x0B] = "rgb(0, 60, 0)";
+        this.paletteTable[0x0C] = "rgb(0, 50, 60)";
+        this.paletteTable[0x0D] = "rgb(0, 0, 0)";
+        this.paletteTable[0x0E] = "rgb(0, 0, 0)";
+        this.paletteTable[0x0F] = "rgb(0, 0, 0)";
+        this.paletteTable[0x10] = "rgb(152, 150, 152)";
+        this.paletteTable[0x11] = "rgb(8, 76, 196)";
+        this.paletteTable[0x12] = "rgb(48, 50, 236)";
+        this.paletteTable[0x13] = "rgb(92, 30, 228)";
+        this.paletteTable[0x14] = "rgb(136, 20, 176)";
+        this.paletteTable[0x15] = "rgb(160, 20, 100)";
+        this.paletteTable[0x16] = "rgb(152, 34, 32)";
+        this.paletteTable[0x17] = "rgb(120, 60, 0)";
+        this.paletteTable[0x18] = "rgb(84, 90, 0)";
+        this.paletteTable[0x19] = "rgb(40, 114, 0)";
+        this.paletteTable[0x1A] = "rgb(8, 124, 0)";
+        this.paletteTable[0x1B] = "rgb(0, 118, 40)";
+        this.paletteTable[0x1C] = "rgb(0, 102, 120)";
+        this.paletteTable[0x1D] = "rgb(0, 0, 0)";
+        this.paletteTable[0x1E] = "rgb(0, 0, 0)";
+        this.paletteTable[0x1F] = "rgb(0, 0, 0)";
+        this.paletteTable[0x20] = "rgb(236, 238, 236)";
+        this.paletteTable[0x21] = "rgb(76, 154, 236)";
+        this.paletteTable[0x22] = "rgb(120, 124, 236)";
+        this.paletteTable[0x23] = "rgb(176, 98, 236)";
+        this.paletteTable[0x24] = "rgb(228, 84, 236)";
+        this.paletteTable[0x25] = "rgb(236, 88, 180)";
+        this.paletteTable[0x26] = "rgb(236, 106, 100)";
+        this.paletteTable[0x27] = "rgb(212, 136, 32)";
+        this.paletteTable[0x28] = "rgb(160, 170, 0)";
+        this.paletteTable[0x29] = "rgb(116, 196, 0)";
+        this.paletteTable[0x2A] = "rgb(76, 208, 32)";
+        this.paletteTable[0x2B] = "rgb(56, 204, 108)";
+        this.paletteTable[0x2C] = "rgb(56, 180, 204)";
+        this.paletteTable[0x2D] = "rgb(60, 60, 60)";
+        this.paletteTable[0x2E] = "rgb(0, 0, 0)";
+        this.paletteTable[0x2F] = "rgb(0, 0, 0)";
+        this.paletteTable[0x30] = "rgb(236, 238, 236)";
+        this.paletteTable[0x31] = "rgb(168, 204, 236)";
+        this.paletteTable[0x32] = "rgb(188, 188, 236)";
+        this.paletteTable[0x33] = "rgb(212, 178, 236)";
+        this.paletteTable[0x34] = "rgb(236, 174, 236)";
+        this.paletteTable[0x35] = "rgb(236, 174, 212)";
+        this.paletteTable[0x36] = "rgb(236, 180, 176)";
+        this.paletteTable[0x37] = "rgb(228, 196, 144)";
+        this.paletteTable[0x38] = "rgb(204, 210, 120)";
+        this.paletteTable[0x39] = "rgb(180, 222, 120)";
+        this.paletteTable[0x3A] = "rgb(168, 226, 144)";
+        this.paletteTable[0x3B] = "rgb(152, 226, 180)";
+        this.paletteTable[0x3C] = "rgb(160, 214, 228)";
+        this.paletteTable[0x3D] = "rgb(160, 162, 160)";
+        this.paletteTable[0x3E] = "rgb(0, 0, 0)";
+        this.paletteTable[0x3F] = "rgb(0, 0, 0)";
         this.nameTable = [[0]]; //one name table is 1kb. nes can store 2;
+        this.display = document.querySelector("#screen");
+        this.context = this.display.getContext("2d");
+        this.scanline = 0;
+        this.cycle = 0;
+        this.frameComplete = false;
         for (var i = 0; i < 2; i++) {
             this.nameTable[i] = [0];
             for (var j = 0; j < 1024; j++) {
@@ -834,6 +907,20 @@ var PPU = /** @class */ (function () {
         this.cartridge = cart;
     };
     PPU.prototype.clock = function () {
+        //draw at current location
+        this.context.fillStyle = this.paletteTable[0x24];
+        this.context.fillRect((this.cycle) * 800 / 341, this.scanline * 700 / 262, 800 / 341, 700 / 262);
+        //advance cycle and scanline accordlingly
+        this.cycle++;
+        if (this.cycle >= 341) {
+            this.cycle = 0;
+            this.scanline++;
+            console.log(800/342, 700/262);
+            if (this.scanline >= 261) {
+                this.scanline = -1;
+                this.frameComplete = true;
+            }
+        }
     };
     return PPU;
 }());
@@ -908,7 +995,6 @@ var Cartridge = /** @class */ (function () {
         this.mirror = ""; //handles mirroring for the nametable which is responsible for displaying backgrounds
     }
     Cartridge.prototype.initCartridge = function (data, bus) {
-        console.log(this);
         bus.insertCartridge(this);
         var cartridgePntr = 16; //we will init header using a for loop but after that we will rely on this var to point to where we want to read from the cartride;
         //get header
@@ -941,7 +1027,6 @@ var Cartridge = /** @class */ (function () {
                 this.header.unused += data[i].toString(16);
             }
         }
-        console.log(this.header);
         if (this.header.mapper1 & 0x04) { //checks if "trainer" exists. if it does we skip past it;
             cartridgePntr += 512; //Lily this may be an inanaccurate please check back if things dont work
         }
@@ -963,7 +1048,6 @@ var Cartridge = /** @class */ (function () {
                 this.CHRMem[i] = data[cartridgePntr];
                 cartridgePntr++;
             }
-            console.log(this);
         }
         if (nFileType == 2) {
         }
@@ -979,7 +1063,6 @@ var Cartridge = /** @class */ (function () {
         if (mappedAddr > -1) {
             data = this.PRGMem[mappedAddr];
         }
-        console.log(data);
         return data;
     };
     ;
@@ -1004,7 +1087,7 @@ var Cartridge = /** @class */ (function () {
     };
     ;
     Cartridge.prototype.ppuWrite = function (addr, val) {
-        return false;
+        return -1;
     };
     ;
     return Cartridge;
@@ -1033,7 +1116,6 @@ var Bus = /** @class */ (function () {
         if (this.cartridge.cpuRead(addr) > -1) {
             //check if cpu read is in cartridge address range
             data = this.cartridge.cpuRead(addr);
-            console.log("bus:", data);
         }
         else if (addr >= 0x0000 && addr <= 0x1FFF) {
             data = this.cpuRam[addr & 0x07FF]; // implements mirroring for the 8kb addressable range of the cpu ram 
@@ -1051,11 +1133,19 @@ var Bus = /** @class */ (function () {
     Bus.prototype.connectPPU = function (ppu) {
         this.ppu = ppu;
     };
+    Bus.prototype.connectCPU = function (cpu) {
+        this.cpu = cpu;
+    };
     Bus.prototype.reset = function () {
         this.cpu.reset();
         this.clockCounter = 0;
     };
     Bus.prototype.clock = function () {
+        this.ppu.clock();
+        if (this.clockCounter % 3 == 0) { //cpu clock runs 3 times slower than ppu;
+            this.cpu.clock();
+        }
+        this.clockCounter++;
     };
     return Bus;
 }());
@@ -1065,8 +1155,7 @@ var bus = new Bus();
 var cart = new Cartridge();
 cpu.connectBus(bus);
 bus.connectPPU(ppu);
-console.log(cpu.pc);
-console.log(cpu.pc);
+bus.connectCPU(cpu);
 var rom = "A20A8E0000A2038E0100AC0000A900186D010088D0FA8D0200EAEAEA";
 var offset = 0x8000;
 var fr = new FileReader();
@@ -1074,11 +1163,12 @@ var romInput = document.getElementById('inputfile');
 romInput.addEventListener('change', function () {
     var fr = new FileReader();
     //fr.readAsText(this.files[0]);
-    console.log(romInput.files);
-    console.log(fr);
     fr.onload = function () {
-        console.log(fr.result);
         cart.initCartridge(new Uint8Array(fr.result), bus); //pass the cartridge class the rom's binary data in UInt8 format
+        //i am literally guessing these numbers
+        cpu.pc = 0x8000;
+        // bus.cpuRam[0xFFFC] = 0x00;
+        // bus.cpuRam[0xFFFD] = 0x80;
         //console.log(romInput);
     };
     fr.readAsArrayBuffer(romInput.files[0]);
@@ -1098,12 +1188,16 @@ romInput.addEventListener('change', function () {
 document.addEventListener("keydown", keyDownHandler, false);
 var cpuDisplay = document.getElementById("cpuDisplay");
 function renderCpuDisplay(display) {
-    console.log(display);
 }
 function keyDownHandler(e) {
     if (e.keyCode == 32) {
         cpu.cycles = 0;
         cpu.clock();
+        while (!ppu.frameComplete) {
+            bus.clock();
+        }
+        ;
+        ppu.frameComplete = false;
         renderCpuDisplay(cpuDisplay);
     }
 }
