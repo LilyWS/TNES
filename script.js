@@ -160,6 +160,7 @@ var mos6502 = /** @class */ (function () {
             this.opcode = this.read(this.pc);
             this.pc++;
             var opc = this.lookup[this.opcode]; //stores the opcode we need
+            //console.log(opc[0]);
             this.cycles = opc[3];
             var ac1 = opc[2].bind(this)(); // find out if both methods request additional cycles
             var ac2 = opc[1].bind(this)();
@@ -909,14 +910,14 @@ var PPU = /** @class */ (function () {
     PPU.prototype.clock = function () {
         //draw at current location
         this.context.fillStyle = this.paletteTable[0x24];
-        this.context.fillRect((this.cycle) * 800 / 341, this.scanline * 700 / 262, 800 / 341, 700 / 262);
+        this.context.fillRect((this.cycle) * 800 / 342, this.scanline * 700 / 262, 800 / 342, 700 / 262);
         //advance cycle and scanline accordlingly
         this.cycle++;
         if (this.cycle >= 341) {
             this.cycle = 0;
             this.scanline++;
-            console.log(800/342, 700/262);
             if (this.scanline >= 261) {
+                console.log("finito")
                 this.scanline = -1;
                 this.frameComplete = true;
             }
@@ -995,6 +996,7 @@ var Cartridge = /** @class */ (function () {
         this.mirror = ""; //handles mirroring for the nametable which is responsible for displaying backgrounds
     }
     Cartridge.prototype.initCartridge = function (data, bus) {
+        //console.log(this);
         bus.insertCartridge(this);
         var cartridgePntr = 16; //we will init header using a for loop but after that we will rely on this var to point to where we want to read from the cartride;
         //get header
@@ -1027,6 +1029,7 @@ var Cartridge = /** @class */ (function () {
                 this.header.unused += data[i].toString(16);
             }
         }
+        //console.log(this.header);
         if (this.header.mapper1 & 0x04) { //checks if "trainer" exists. if it does we skip past it;
             cartridgePntr += 512; //Lily this may be an inanaccurate please check back if things dont work
         }
@@ -1048,12 +1051,14 @@ var Cartridge = /** @class */ (function () {
                 this.CHRMem[i] = data[cartridgePntr];
                 cartridgePntr++;
             }
+            //console.log(this);
         }
         if (nFileType == 2) {
         }
         switch (this.mapperID) {
             case 0:
                 this.mapper = new Mapper_000(this.header.prgRomChunks, this.header.chrRomChunks);
+                break;
         }
     };
     //will hijack read/writes from the bus/ppu if the addr is within the cartridges range
@@ -1063,6 +1068,7 @@ var Cartridge = /** @class */ (function () {
         if (mappedAddr > -1) {
             data = this.PRGMem[mappedAddr];
         }
+        //console.log(data);
         return data;
     };
     ;
@@ -1116,6 +1122,7 @@ var Bus = /** @class */ (function () {
         if (this.cartridge.cpuRead(addr) > -1) {
             //check if cpu read is in cartridge address range
             data = this.cartridge.cpuRead(addr);
+            //console.log("bus:", data);
         }
         else if (addr >= 0x0000 && addr <= 0x1FFF) {
             data = this.cpuRam[addr & 0x07FF]; // implements mirroring for the 8kb addressable range of the cpu ram 
@@ -1156,6 +1163,8 @@ var cart = new Cartridge();
 cpu.connectBus(bus);
 bus.connectPPU(ppu);
 bus.connectCPU(cpu);
+//console.log(cpu.pc);
+//console.log(cpu.pc);
 var rom = "A20A8E0000A2038E0100AC0000A900186D010088D0FA8D0200EAEAEA";
 var offset = 0x8000;
 var fr = new FileReader();
@@ -1163,13 +1172,16 @@ var romInput = document.getElementById('inputfile');
 romInput.addEventListener('change', function () {
     var fr = new FileReader();
     //fr.readAsText(this.files[0]);
+    //console.log(romInput.files);
+    //console.log(fr);
     fr.onload = function () {
+        //console.log(fr.result);
         cart.initCartridge(new Uint8Array(fr.result), bus); //pass the cartridge class the rom's binary data in UInt8 format
         //i am literally guessing these numbers
         cpu.pc = 0x8000;
         // bus.cpuRam[0xFFFC] = 0x00;
         // bus.cpuRam[0xFFFD] = 0x80;
-        //console.log(romInput);
+        ////console.log(romInput);
     };
     fr.readAsArrayBuffer(romInput.files[0]);
 });
@@ -1186,19 +1198,36 @@ romInput.addEventListener('change', function () {
 // }
 // loadRom(rom, offset);
 document.addEventListener("keydown", keyDownHandler, false);
-var cpuDisplay = document.getElementById("cpuDisplay");
-function renderCpuDisplay(display) {
+var running;
+function emLoop() {
+    var start = Date.now();
+    var lastUpdate = start;
+    
+    while (running) {
+        console.log(Date.now() - lastUpdate);
+        if (Date.now() - lastUpdate > 160) {
+            lastUpdate = Date.now();
+            cpu.cycles = 0;
+            //cpu.clock();
+            while (!ppu.frameComplete) {
+                bus.clock();
+            }
+            ppu.frameComplete = false;
+        }
+    }
 }
 function keyDownHandler(e) {
     if (e.keyCode == 32) {
         cpu.cycles = 0;
-        cpu.clock();
+        //cpu.clock();
         while (!ppu.frameComplete) {
             bus.clock();
         }
-        ;
         ppu.frameComplete = false;
-        renderCpuDisplay(cpuDisplay);
+    }
+    else if (e.keyCode == 82) {
+        running = !running;
+        emLoop();
     }
 }
 /* test program. compile at https://www.masswerk.at/6502/assembler.html
